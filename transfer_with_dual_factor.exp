@@ -1,0 +1,80 @@
+#!/usr/bin/expect -f
+
+# Default values
+set source_dir "../test"
+set user_name "gglick9"
+set remote_host "login.expanse.sdsc.edu"
+set remote_dir "~/"
+
+# Set the expected auth message based on username
+set expected_auth_message "TOTP code for $user_name:"
+
+# Process command line arguments
+set argc [llength $argv]
+set i 0
+
+while {$i < $argc} {
+    set arg [lindex $argv $i]
+    
+    switch -glob -- $arg {
+        "--source" {
+            incr i
+            set source_dir [lindex $argv $i]
+        }
+        "--user" {
+            incr i
+            set user_name [lindex $argv $i]
+        }
+        "--host" {
+            incr i
+            set remote_host [lindex $argv $i]
+        }
+        "--dest" {
+            incr i
+            set remote_dir [lindex $argv $i]
+        }
+        "--help" {
+            send_user "Usage: [file tail $argv0] \[options\]\n"
+            send_user "If the dual auth is not working maybe you need to update the expected_auth_message!\n"
+            send_user "Options:\n"
+            send_user "  --source DIR       Source directory (default: '../test')\n"
+            send_user "  --user USERNAME    Remote username (default: 'gglick9')\n"
+            send_user "  --host HOSTNAME    Remote hostname (default: 'login.expanse.sdsc.edu')\n"
+            send_user "  --dest DIR         Destination directory on remote host (default: '~/')\n"
+            send_user "  --help             Display this help message\n"
+            send_user "\nExample:\n"
+            send_user "  [file tail $argv0] --source ./data --user johndoe --host login.expanse.sdsc.edu --dest ~/projects\n"
+            exit 0
+        }
+        default {
+            send_user "Unknown option: $arg\n"
+            send_user "Use --help for usage information\n"
+            exit 1
+        }
+    }
+    incr i
+}
+
+# Display transfer information
+send_user "\nStarting transfer to Expanse...\n"
+send_user "Source directory: $source_dir\n"
+send_user "Remote host: $user_name@$remote_host\n"
+send_user "Remote directory: $remote_dir\n\n"
+
+# Get dual auth code from user
+set timeout -1
+send_user "Please enter your dual authentication code: "
+expect_user -re "(.*)\n"
+set auth_code $expect_out(1,string)
+
+# Start the rsync process
+spawn rsync -avz $source_dir $user_name@$remote_host:$remote_dir
+
+# Handle the authentication prompt must be exactly the prompted message 
+expect $expected_auth_message
+send "$auth_code\r"
+
+# Wait for completion
+expect eof
+
+send_user "\nTransfer completed.\n"
